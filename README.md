@@ -1919,20 +1919,12 @@ This project is **NOT** officially affiliated with WhatsApp or Meta. This is an 
 
 ---
 
-## 📞 Support
-
-- **Issues**: [Whatsapp Channel](https://whatsapp.com/channel/0029VbBK53XBvvslYeZlBe0V)
-- **Discussions**: [Whatsapp Channel](https://whatsapp.com/channel/0029VbBK53XBvvslYeZlBe0V)
-- **NPM**: [@eugen/baileys](https://www.npmjs.com/package/@eugen/baileys)
-
----
-
 <div align="center">
   
   **Made with ❤️ by [PrinzXz](https://github.com/PrinzXz)**
   
   ⭐ **Star us on GitHub!** ⭐
   
-  [GitHub](https://github.com/PrinzXz/Baileys-Fix) • [NPM](https://www.npmjs.com/package/@eugen/baileys) • [Documentation](https://github.com/PrinzXz/Baileys-Fix/wiki)
+  [GitHub](https://github.com/PrinzXz/Baileys-Fix) • [Documentation](https://github.com/PrinzXz/Baileys-Fix/wiki)
 
 </div>
