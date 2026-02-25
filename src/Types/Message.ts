@@ -215,6 +215,15 @@ export type WASendableProduct = Omit<proto.Message.ProductMessage.IProductSnapsh
 	productImage: WAMediaUpload
 }
 
+export type StickerPackMessageOptions = {
+	stickers: { data: WAMediaUpload; isAnimated?: boolean; emojis?: string[]; accessibilityLabel?: string }[]
+	name: string
+	publisher: string
+	packId?: string
+	description?: string
+	cover: WAMediaUpload
+}
+
 export type AnyRegularMessageContent = (
 	| ({
 			text: string
@@ -262,6 +271,9 @@ export type AnyRegularMessageContent = (
 			businessOwnerJid?: string
 			body?: string
 			footer?: string
+	  }
+	| {
+			stickerPack: StickerPackMessageOptions
 	  }
 	| SharePhoneNumber
 	| RequestPhoneNumber

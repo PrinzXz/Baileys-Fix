@@ -2,6 +2,7 @@ import { Boom } from '@hapi/boom'
 import { randomBytes } from 'crypto'
 import { promises as fs } from 'fs'
 import { type Transform } from 'stream'
+import { zip } from 'fflate'
 import { proto } from '../../WAProto/index.js'
 import {
 	CALL_AUDIO_PREFIX,
@@ -24,7 +25,8 @@ import type {
 	WAMessage,
 	WAMessageContent,
 	WAMessageKey,
-	WATextMessage
+	WATextMessage,
+	StickerPackMessageOptions
 } from '../Types'
 import { WAMessageStatus, WAProto } from '../Types'
 import { isJidGroup, isJidNewsletter, isJidStatusBroadcast, jidNormalizedUser } from '../WABinary'
@@ -37,7 +39,10 @@ import {
 	generateThumbnail,
 	getAudioDuration,
 	getAudioWaveform,
+	getImageProcessingLibrary,
 	getRawMediaUploadData,
+	getStream,
+	toBuffer,
 	type MediaDownloadOptions
 } from './messages-media'
 import { shouldIncludeReportingToken } from './reporting-utils'
@@ -486,6 +491,8 @@ export const generateWAMessageContent = async (
 				}
 			}
 		}
+	} else if (hasNonNullishProperty(message, 'stickerPack')) {
+		return await prepareStickerPackMessage(message.stickerPack, options) as any
 	} else if (hasNonNullishProperty(message, 'pin')) {
 		m.pinInChatMessage = {}
 		m.messageContextInfo = {}
@@ -882,6 +889,90 @@ export const updateMessageWithPollUpdate = (msg: Pick<WAMessage, 'pollUpdates'>,
 	msg.pollUpdates = reactions
 }
 
+export async function prepareStickerPackMessage(stickerPack: StickerPackMessageOptions, options: MessageContentGenerationOptions) {
+	const { stickers, name, publisher, packId, description } = stickerPack
+	if (!stickers?.length) throw new Boom('Sticker pack requires at least one sticker', { statusCode: 400 })
+
+	const lib = await getImageProcessingLibrary()
+	const packId_ = packId || generateMessageIDV2()
+	const validStickers: any[] = []
+
+	for (const s of stickers) {
+		try {
+			const { stream } = await getStream(s.data)
+			let buffer = await toBuffer(stream as any)
+			const isWebP = buffer.length >= 12 && buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46
+			if (!isWebP) {
+				if ('sharp' in lib) buffer = await lib.sharp!.default(buffer).webp().toBuffer()
+				else if ('jimp' in lib) buffer = await (lib.jimp as any).Jimp.read(buffer).then((img: any) => img.getBufferAsync('image/webp'))
+			}
+			if (buffer.length > 1024 * 1024) {
+				if ('sharp' in lib) buffer = await lib.sharp!.default(buffer).webp({ quality: 50 }).toBuffer()
+				if (buffer.length > 1024 * 1024) continue
+			}
+			validStickers.push({
+				fileName: `${sha256(buffer).toString('base64').replace(/\//g, '-')}.webp`,
+				buffer, mimetype: 'image/webp', isAnimated: s.isAnimated || false,
+				emojis: s.emojis || [], accessibilityLabel: s.accessibilityLabel
+			})
+		} catch (e: any) { options.logger?.warn(`Sticker failed: ${e.message}`) }
+	}
+
+	if (!validStickers.length) throw new Boom('No valid stickers', { statusCode: 400 })
+
+	const { stream: covStream } = await getStream(stickerPack.cover)
+	let coverBuffer = await toBuffer(covStream as any)
+	const isWebPCover = coverBuffer.length >= 12 && coverBuffer[0] === 0x52 && coverBuffer[1] === 0x49 && coverBuffer[2] === 0x46 && coverBuffer[3] === 0x46
+	if (!isWebPCover) {
+		if ('sharp' in lib) coverBuffer = await lib.sharp!.default(coverBuffer).webp().toBuffer()
+		else if ('jimp' in lib) coverBuffer = await (lib.jimp as any).Jimp.read(coverBuffer).then((img: any) => img.getBufferAsync('image/webp'))
+	}
+
+	const processBatch = async (batch: any[], batchIdx: number) => {
+		const batchData: Record<string, [Uint8Array, { level: 0 }]> = {}
+		batch.forEach(s => { batchData[s.fileName] = [new Uint8Array(s.buffer), { level: 0 }] })
+		const trayFile = `${packId_}_batch${batchIdx}.webp`
+		batchData[trayFile] = [new Uint8Array(coverBuffer), { level: 0 }]
+
+		const zipBuf = await new Promise<Buffer>((resolve, reject) => { zip(batchData, (err: any, data: any) => err ? reject(err) : resolve(Buffer.from(data))) })
+		const upload = await encryptedStream(zipBuf, 'sticker-pack' as any, { logger: options.logger, opts: options.options })
+		const uploadRes = await options.upload(upload.encFilePath, {
+			fileEncSha256B64: upload.fileEncSha256.toString('base64'), mediaType: 'sticker-pack' as any, timeoutMs: options.mediaUploadTimeoutMs
+		})
+		await fs.unlink(upload.encFilePath)
+
+		let thumbBuf: Buffer | undefined
+		if ('sharp' in lib) thumbBuf = await lib.sharp!.default(coverBuffer).resize(252, 252).jpeg().toBuffer()
+		else if ('jimp' in lib) thumbBuf = await (lib.jimp as any).Jimp.read(coverBuffer).then((img: any) => img.resize(252, 252).getBufferAsync('image/jpeg'))
+
+		let thumbUploadRes: any
+		if (thumbBuf?.length) {
+			const thumbUpload = await encryptedStream(thumbBuf, 'thumbnail-sticker-pack' as any, { logger: options.logger, opts: options.options })
+			thumbUploadRes = await options.upload(thumbUpload.encFilePath, {
+				fileEncSha256B64: thumbUpload.fileEncSha256.toString('base64'), mediaType: 'thumbnail-sticker-pack' as any, timeoutMs: options.mediaUploadTimeoutMs
+			})
+			await fs.unlink(thumbUpload.encFilePath)
+		}
+
+		return {
+			name: `${name} (${batchIdx + 1})`, publisher, packDescription: description, stickerPackId: `${packId_}_${batchIdx}`,
+			stickerPackOrigin: WAProto.Message.StickerPackMessage.StickerPackOrigin.USER_CREATED, stickerPackSize: zipBuf.length,
+			stickers: batch.map(s => ({ fileName: s.fileName, mimetype: s.mimetype, isAnimated: s.isAnimated, emojis: s.emojis, accessibilityLabel: s.accessibilityLabel })),
+			fileSha256: upload.fileSha256, fileEncSha256: upload.fileEncSha256, mediaKey: upload.mediaKey,
+			directPath: uploadRes.directPath, fileLength: upload.fileLength, mediaKeyTimestamp: unixTimestampSeconds(), trayIconFileName: trayFile,
+			...(thumbUploadRes && { thumbnailDirectPath: thumbUploadRes.directPath, thumbnailHeight: 252, thumbnailWidth: 252, imageDataHash: thumbBuf ? sha256(thumbBuf).toString('base64') : undefined })
+		}
+	}
+
+	if (validStickers.length > 60) {
+		const batches: any[][] = []
+		for (let i = 0; i < validStickers.length; i += 60) batches.push(validStickers.slice(i, i + 60))
+		const batchResults = await Promise.all(batches.map((b, i) => processBatch(b, i)))
+		return { stickerPackMessage: batchResults as any, isBatched: true, batchCount: batches.length }
+	}
+
+	return { stickerPackMessage: await processBatch(validStickers, 0), isBatched: false } as WAMessageContent
+}
 /** Update the message with a new event response */
 export const updateMessageWithEventResponse = (
 	msg: Pick<WAMessage, 'eventResponses'>,
