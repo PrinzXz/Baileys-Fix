@@ -9,7 +9,9 @@ const makeWASocket = (config: UserFacingSocketConfig) => {
 		...config
 	}
 
-	newConfig.logger.info('Using PrinzXz/Baileys-Fix ✨')
+	const _version = newConfig.version.join('.')
+	newConfig.logger.info(`WA v${_version}`)
+	console.log(`[ BAILEYS ] Using Baileys-Fix by PrinzXz ✨ (WA v${_version})`)
 
 	return makeCommunitiesSocket(newConfig)
 }
