@@ -11,7 +11,6 @@ const makeWASocket = (config: UserFacingSocketConfig) => {
 
 	const _version = newConfig.version.join('.')
 	newConfig.logger.info(`WA v${_version}`)
-	console.log(`[ BAILEYS ] Using Baileys-Fix by PrinzXz ✨ (WA v${_version})`)
 
 	return makeCommunitiesSocket(newConfig)
 }
