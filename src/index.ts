@@ -3,12 +3,12 @@ import { DEFAULT_CONNECTION_CONFIG } from './Defaults/index'
 
 const _version = DEFAULT_CONNECTION_CONFIG.version.join('.')
 console.log(`
-┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-┃ ✨ BAILEYS-FIX BY PRINZXZ
-┃ ➔ WA Version: v${_version}
-┃ ➔ Features: EugenHandler, StickerPack, Carousel
-┃ ➔ Status: 🚀 Library Loaded Successfully
-┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+\x1b[36m====================================================\x1b[0m
+\x1b[1m\x1b[32m [ BAILEYS-FIX BY PRINZXZ ]\x1b[0m
+ \x1b[33mWA Version:\x1b[0m v${_version}
+ \x1b[33mFeatures:\x1b[0m   EugenHandler, StickerPack, Carousel
+ \x1b[33mStatus:\x1b[0m     Library Loaded Successfully
+\x1b[36m====================================================\x1b[0m
 `)
 
 export * from '../WAProto/index.js'
