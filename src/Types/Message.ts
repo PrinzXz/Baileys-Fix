@@ -275,6 +275,9 @@ export type AnyRegularMessageContent = (
 	| {
 			stickerPack: StickerPackMessageOptions
 	  }
+	| {
+			stickerPackMessage: proto.Message.IStickerPackMessage
+	  }
 	| SharePhoneNumber
 	| RequestPhoneNumber
 ) &

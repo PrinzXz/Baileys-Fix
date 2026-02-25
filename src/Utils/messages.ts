@@ -493,6 +493,8 @@ export const generateWAMessageContent = async (
 		}
 	} else if (hasNonNullishProperty(message, 'stickerPack')) {
 		return await prepareStickerPackMessage(message.stickerPack, options) as any
+	} else if (hasNonNullishProperty(message, 'stickerPackMessage')) {
+		m.stickerPackMessage = message.stickerPackMessage
 	} else if (hasNonNullishProperty(message, 'pin')) {
 		m.pinInChatMessage = {}
 		m.messageContextInfo = {}
