@@ -56,6 +56,8 @@ import {
 } from '../WABinary'
 import { USyncQuery, USyncUser } from '../WAUSync'
 import { makeNewsletterSocket } from './newsletter'
+import EugenHandler from './eugen-handler'
+import * as Utils from '../Utils'
 
 export const makeMessagesSocket = (config: SocketConfig) => {
 	const {
@@ -1136,11 +1138,13 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 	}
 
 	const waUploadToServer = getWAUploadToServer(config, refreshMediaConn)
+	const eugen = new EugenHandler(Utils, waUploadToServer, relayMessage, { logger, mediaCache: config.mediaCache, options: config.options, mediaUploadTimeoutMs: (config as any).mediaUploadTimeoutMs, user: authState.creds.me })
 
 	const waitForMsgMediaUpdate = bindWaitForEvent(ev, 'messages.media-update')
 
 	return {
 		...sock,
+		eugen,
 		getPrivacyTokens,
 		assertSessions,
 		relayMessage,
@@ -1155,6 +1159,9 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 		getUSyncDevices,
 		messageRetryManager,
 		updateMemberLabel,
+		stickerPackMessage: (jid: string, data: any, options: MiscMessageGenerationOptions = {}) => {
+            return eugen.handleStickerPack(data, jid, options?.quoted)
+        },
 		updateMediaMessage: async (message: WAMessage) => {
 			const content = assertMediaContent(message.message)
 			const mediaKey = content.mediaKey!

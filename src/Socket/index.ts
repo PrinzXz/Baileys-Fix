@@ -9,6 +9,8 @@ const makeWASocket = (config: UserFacingSocketConfig) => {
 		...config
 	}
 
+	newConfig.logger.info('Using PrinzXz/Baileys-Fix ✨')
+
 	return makeCommunitiesSocket(newConfig)
 }
 
