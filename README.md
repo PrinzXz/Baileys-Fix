@@ -2,7 +2,7 @@
 
 <div align="center">
   
-  ![Eugen Banner](https://image2url.com/r2/default/images/1775131576067-f5e4ee98-6dba-4506-8d89-6d9a703147f9.jpeg)
+  ![Eugen Banner](https://files.catbox.moe/4gr4d3.jpeg)
   
   **Advanced WhatsApp Web API**
   
