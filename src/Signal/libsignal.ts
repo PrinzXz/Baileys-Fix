@@ -22,6 +22,35 @@ import { SenderKeyRecord } from './Group/sender-key-record'
 import { GroupCipher, GroupSessionBuilder, SenderKeyDistributionMessage } from './Group'
 import { LIDMappingStore } from './lid-mapping'
 
+// Patch libsignal.SessionCipher.prototype.decryptWithSessions to prevent console spam
+if (
+	(libsignal as any).SessionCipher &&
+	(libsignal as any).SessionCipher.prototype.decryptWithSessions
+) {
+	;(libsignal as any).SessionCipher.prototype.decryptWithSessions = async function (
+		data: any,
+		sessions: any[]
+	) {
+		if (!sessions.length) {
+			throw new Error('No sessions available')
+		}
+		const errs = []
+		for (const session of sessions) {
+			try {
+				const plaintext = await this.doDecryptWhisperMessage(data, session)
+				session.indexInfo.used = Date.now()
+				return { session, plaintext }
+			} catch (e) {
+				errs.push(e)
+			}
+		}
+		// Intentionally omitting console.error here to avoid terminal spam
+		throw new Error(
+			'No matching sessions found for message: ' + errs.map((e: any) => e.message).join(', ')
+		)
+	}
+}
+
 /** Extract identity key from PreKeyWhisperMessage for identity change detection */
 function extractIdentityFromPkmsg(ciphertext: Uint8Array): Uint8Array | undefined {
 	try {
@@ -146,9 +175,17 @@ export function makeLibSignalRepository(
 
 			// If it's not a sync message, we need to ensure atomicity
 			// For regular messages, we use a transaction to ensure atomicity
-			return parsedKeys.transaction(async () => {
-				return await doDecrypt()
-			}, jid)
+			try {
+				return await parsedKeys.transaction(async () => {
+					return await doDecrypt()
+				}, jid)
+			} catch (e: any) {
+				const msg = e?.message || ''
+				if (msg.includes('Bad MAC') || msg.includes('Key used already')) {
+					logger?.warn?.({ jid, error: msg }, 'Session corrupted')
+				}
+				throw e
+			}
 		},
 
 		async encryptMessage({ jid, data }) {
